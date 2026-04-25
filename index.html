@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#0d0b1e"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="سودوكو"/>
+  <title>سودوكو</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0b1e; overflow-x: hidden; }
+    #root { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useCallback } = React;
+
+const DIFFICULTIES = { سهل: 36, متوسط: 27, صعب: 20 };
+
+function generateFullBoard() {
+  const board = Array.from({ length: 9 }, () => Array(9).fill(0));
+  fillBoard(board);
+  return board;
+}
+function fillBoard(board) {
+  const nums = [1,2,3,4,5,6,7,8,9];
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (board[r][c] === 0) {
+        const shuffled = nums.slice().sort(() => Math.random() - 0.5);
+        for (let n of shuffled) {
+          if (isValid(board, r, c, n)) {
+            board[r][c] = n;
+            if (fillBoard(board)) return true;
+            board[r][c] = 0;
+          }
+        }
+        return false;
+      }
+    }
+  }
+  return true;
+}
+function isValid(board, row, col, num) {
+  for (let i = 0; i < 9; i++) {
+    if (board[row][i] === num) return false;
+    if (board[i][col] === num) return false;
+  }
+  const br = Math.floor(row/3)*3, bc = Math.floor(col/3)*3;
+  for (let r=br;r<br+3;r++) for (let c=bc;c<bc+3;c++) if (board[r][c]===num) return false;
+  return true;
+}
+function createPuzzle(solution, clues) {
+  const cells=[];
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) cells.push([r,c]);
+  cells.sort(()=>Math.random()-0.5);
+  const puzzle=solution.map(r=>[...r]); let removed=0;
+  for (const [r,c] of cells) { if (removed>=81-clues) break; puzzle[r][c]=0; removed++; }
+  return puzzle;
+}
+function deepCopy(b){return b.map(r=>[...r]);}
+function formatTime(s){return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;}
+
+const DEMO_GRID=[
+  [5,3,0,0,7,0,0,0,0],[6,0,0,1,9,5,0,0,0],[0,9,8,0,0,0,0,6,0],
+  [8,0,0,0,6,0,0,0,3],[4,0,0,8,0,3,0,0,1],[7,0,0,0,2,0,0,0,6],
+  [0,6,0,0,0,0,2,8,0],[0,0,0,4,1,9,0,0,5],[0,0,0,0,8,0,0,7,9],
+];
+
+function HomeScreen({onStart}) {
+  const [selectedDiff, setSelectedDiff] = useState("متوسط");
+  const [animate, setAnimate] = useState(false);
+  useEffect(()=>{setTimeout(()=>setAnimate(true),80);},[]);
+
+  const diffInfo={
+    سهل:  {icon:"🌱",desc:"للمبتدئين",color:"#34d399",shadow:"#34d39944"},
+    متوسط:{icon:"⚡",desc:"معتدل",color:"#f59e0b",shadow:"#f59e0b44"},
+    صعب:  {icon:"🔥",desc:"للمحترفين",color:"#f43f5e",shadow:"#f43f5e44"},
+  };
+
+  return (
+    <div style={{
+      minHeight:"100vh",
+      background:"linear-gradient(160deg,#0d0b1e 0%,#1a1035 55%,#0d1b2a 100%)",
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+      padding:"24px 16px",fontFamily:"'Cairo',sans-serif",direction:"rtl",
+      overflow:"hidden",position:"relative",
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet"/>
+      <style>{`
+        @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+        @keyframes shimmer{0%{opacity:0.4}50%{opacity:1}100%{opacity:0.4}}
+        @keyframes popIn{0%{transform:scale(0.7);opacity:0}100%{transform:scale(1);opacity:1}}
+        @keyframes slideUp{0%{transform:translateY(40px);opacity:0}100%{transform:translateY(0);opacity:1}}
+        .diff-btn:active{transform:scale(0.95)!important;}
+        .start-btn:hover{transform:scale(1.03)!important;box-shadow:0 16px 48px #7c3aed88!important;}
+        .start-btn:active{transform:scale(0.97)!important;}
+        .num-btn:active{transform:scale(0.88)!important;}
+      `}</style>
+
+      {/* Ambient orbs */}
+      <div style={{position:"absolute",top:-120,right:-80,width:320,height:320,borderRadius:"50%",background:"radial-gradient(circle,#7c3aed22,transparent 70%)",pointerEvents:"none",animation:"shimmer 4s ease-in-out infinite"}}/>
+      <div style={{position:"absolute",bottom:-100,left:-60,width:260,height:260,borderRadius:"50%",background:"radial-gradient(circle,#0ea5e922,transparent 70%)",pointerEvents:"none",animation:"shimmer 5s ease-in-out infinite 1s"}}/>
+      <div style={{position:"absolute",top:"38%",left:"5%",width:140,height:140,borderRadius:"50%",background:"radial-gradient(circle,#f43f5e18,transparent 70%)",pointerEvents:"none"}}/>
+
+      {/* Logo area */}
+      <div style={{
+        opacity:animate?1:0,transform:animate?"translateY(0)":"translateY(-28px)",
+        transition:"all 0.75s cubic-bezier(0.34,1.56,0.64,1)",
+        textAlign:"center",marginBottom:28,
+      }}>
+        {/* Decorative mini grid */}
+        <div style={{
+          display:"inline-grid",gridTemplateColumns:"repeat(9,20px)",gap:1.5,
+          background:"rgba(124,58,237,0.25)",padding:6,borderRadius:12,marginBottom:18,
+          boxShadow:"0 0 40px #7c3aed33,inset 0 0 20px #0003",
+          border:"1px solid rgba(167,139,250,0.15)",
+          animation:"float 5s ease-in-out infinite",
+        }}>
+          {DEMO_GRID.map((row,r)=>row.map((val,c)=>(
+            <div key={`${r}-${c}`} style={{
+              width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:9,fontWeight:700,
+              color:val?"#a78bfa":"transparent",
+              background:val?"rgba(13,11,30,0.88)":"rgba(13,11,30,0.35)",
+              borderRadius:2,
+              borderRight:(c+1)%3===0&&c!==8?"1.5px solid #7c3aed88":"none",
+              borderBottom:(r+1)%3===0&&r!==8?"1.5px solid #7c3aed88":"none",
+            }}>{val||""}</div>
+          )))}
+        </div>
+
+        <h1 style={{
+          margin:0,fontSize:52,fontWeight:900,lineHeight:1,
+          background:"linear-gradient(135deg,#f0e6ff,#c4b5fd 40%,#818cf8)",
+          WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
+          letterSpacing:5,
+        }}>سودوكو</h1>
+        <p style={{margin:"8px 0 0",color:"rgba(196,181,253,0.45)",fontSize:12,fontWeight:700,letterSpacing:3}}>
+          SUDOKU · لعبة الأرقام الكلاسيكية
+        </p>
+      </div>
+
+      {/* Difficulty */}
+      <div style={{
+        opacity:animate?1:0,transform:animate?"translateY(0)":"translateY(22px)",
+        transition:"all 0.75s cubic-bezier(0.34,1.56,0.64,1) 0.12s",
+        width:"100%",maxWidth:360,marginBottom:24,
+      }}>
+        <p style={{color:"rgba(196,181,253,0.55)",fontSize:12,fontWeight:700,textAlign:"center",marginBottom:12,letterSpacing:1}}>
+          اختر مستوى الصعوبة
+        </p>
+        <div style={{display:"flex",gap:10}}>
+          {Object.keys(DIFFICULTIES).map(d=>{
+            const info=diffInfo[d], active=selectedDiff===d;
+            return (
+              <button key={d} className="diff-btn" onClick={()=>setSelectedDiff(d)} style={{
+                flex:1,padding:"16px 0",borderRadius:18,border:"none",cursor:"pointer",
+                fontFamily:"Cairo,sans-serif",fontWeight:800,fontSize:14,
+                background:active?`linear-gradient(160deg,${info.color}28,${info.color}10)`:"rgba(255,255,255,0.04)",
+                color:active?info.color:"rgba(196,181,253,0.4)",
+                boxShadow:active?`0 0 22px ${info.shadow},inset 0 0 0 1.5px ${info.color}`:"inset 0 0 0 1px rgba(255,255,255,0.07)",
+                transition:"all 0.3s cubic-bezier(0.34,1.56,0.64,1)",
+                transform:active?"scale(1.06)":"scale(1)",
+                display:"flex",flexDirection:"column",alignItems:"center",gap:5,
+              }}>
+                <span style={{fontSize:24}}>{info.icon}</span>
+                <span>{d}</span>
+                <span style={{fontSize:10,fontWeight:600,opacity:0.65}}>{info.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Start button */}
+      <div style={{
+        opacity:animate?1:0,transform:animate?"translateY(0)":"translateY(22px)",
+        transition:"all 0.75s cubic-bezier(0.34,1.56,0.64,1) 0.22s",
+        width:"100%",maxWidth:360,
+      }}>
+        <button className="start-btn" onClick={()=>onStart(selectedDiff)} style={{
+          width:"100%",padding:"18px 0",borderRadius:22,border:"none",cursor:"pointer",
+          fontFamily:"Cairo,sans-serif",fontWeight:900,fontSize:20,
+          background:"linear-gradient(135deg,#7c3aed,#4f46e5)",
+          color:"#fff",letterSpacing:2,
+          boxShadow:"0 8px 32px #7c3aed55,0 2px 8px #0005",
+          transition:"all 0.25s cubic-bezier(0.34,1.56,0.64,1)",
+        }}>
+          ابدأ اللعب 🎮
+        </button>
+
+        {/* How to play card */}
+        <div style={{
+          marginTop:18,padding:"16px 20px",borderRadius:18,
+          background:"rgba(255,255,255,0.025)",
+          border:"1px solid rgba(167,139,250,0.1)",
+          backdropFilter:"blur(10px)",
+        }}>
+          <p style={{color:"#a78bfa",fontSize:13,fontWeight:800,margin:"0 0 12px",textAlign:"center"}}>كيف تلعب؟</p>
+          {[
+            ["🔢","املأ كل صف وعمود ومربع 3×3 بالأرقام من 1 إلى 9"],
+            ["🚫","لا يتكرر أي رقم في نفس الصف أو العمود أو المربع"],
+            ["✏️","استخدم وضع الملاحظات لتدوين الاحتمالات في الخلية"],
+          ].map(([icon,text])=>(
+            <div key={text} style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8}}>
+              <span style={{fontSize:15,marginTop:1}}>{icon}</span>
+              <span style={{color:"rgba(196,181,253,0.55)",fontSize:12,fontWeight:600,lineHeight:1.55}}>{text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p style={{marginTop:22,color:"rgba(196,181,253,0.2)",fontSize:11,fontWeight:700,opacity:animate?1:0,transition:"opacity 1s 0.5s"}}>
+        صُنع بـ ❤️ لزاك
+      </p>
+    </div>
+  );
+}
+
+function GameScreen({difficulty, onHome}) {
+  const [solution,setSolution]=useState(null);
+  const [board,setBoard]=useState(null);
+  const [selected,setSelected]=useState(null);
+  const [errors,setErrors]=useState({});
+  const [fixed,setFixed]=useState({});
+  const [won,setWon]=useState(false);
+  const [notes,setNotes]=useState({});
+  const [noteMode,setNoteMode]=useState(false);
+  const [timer,setTimer]=useState(0);
+  const [running,setRunning]=useState(false);
+  const [currentDiff,setCurrentDiff]=useState(difficulty);
+
+  const startGame=useCallback((diff)=>{
+    const sol=generateFullBoard();
+    const puz=createPuzzle(sol,DIFFICULTIES[diff]);
+    const fixedCells={};
+    for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(puz[r][c]!==0) fixedCells[`${r}-${c}`]=true;
+    setSolution(sol);setBoard(deepCopy(puz));setFixed(fixedCells);
+    setErrors({});setSelected(null);setWon(false);setNotes({});setNoteMode(false);
+    setTimer(0);setRunning(true);
+  },[]);
+
+  useEffect(()=>{startGame(difficulty);setCurrentDiff(difficulty);},[difficulty]);
+
+  useEffect(()=>{
+    if(!running)return;
+    const id=setInterval(()=>setTimer(t=>t+1),1000);
+    return()=>clearInterval(id);
+  },[running]);
+
+  useEffect(()=>{
+    if(!board||!solution||won)return;
+    if(board.every((row,r)=>row.every((val,c)=>val!==0&&val===solution[r][c]))){setWon(true);setRunning(false);}
+  },[board]);
+
+  const handleNum=(num)=>{
+    if(!selected||!board)return;
+    const[r,c]=selected;
+    if(fixed[`${r}-${c}`])return;
+    if(noteMode){
+      const key=`${r}-${c}`;
+      setNotes(prev=>{const s=new Set(prev[key]||[]);s.has(num)?s.delete(num):s.add(num);return{...prev,[key]:s};});
+      return;
+    }
+    const nb=deepCopy(board);nb[r][c]=num;setBoard(nb);
+    setNotes(prev=>({...prev,[`${r}-${c}`]:new Set()}));
+    if(num!==0&&solution&&num!==solution[r][c]) setErrors(p=>({...p,[`${r}-${c}`]:true}));
+    else setErrors(p=>{const e={...p};delete e[`${r}-${c}`];return e;});
+  };
+
+  const isHl=(r,c)=>{
+    if(!selected)return false;
+    const[sr,sc]=selected;
+    return r===sr||c===sc||(Math.floor(r/3)===Math.floor(sr/3)&&Math.floor(c/3)===Math.floor(sc/3));
+  };
+  const isSm=(r,c)=>{
+    if(!selected||!board)return false;
+    const[sr,sc]=selected;
+    return board[sr][sc]!==0&&board[r][c]===board[sr][sc];
+  };
+
+  if(!board)return null;
+
+  return(
+    <div style={{
+      minHeight:"100vh",
+      background:"linear-gradient(160deg,#0d0b1e 0%,#1a1035 55%,#0d1b2a 100%)",
+      display:"flex",flexDirection:"column",alignItems:"center",
+      padding:"12px 8px 28px",fontFamily:"'Cairo',sans-serif",direction:"rtl",
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet"/>
+      <style>{`
+        @keyframes popIn{0%{transform:scale(0.7);opacity:0}100%{transform:scale(1);opacity:1}}
+        .num-btn:active{transform:scale(0.88)!important;}
+      `}</style>
+
+      {/* Top bar */}
+      <div style={{width:"100%",maxWidth:400,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <button onClick={onHome} style={{
+          background:"rgba(255,255,255,0.05)",border:"1px solid rgba(167,139,250,0.18)",
+          borderRadius:12,padding:"8px 14px",color:"#a78bfa",cursor:"pointer",
+          fontFamily:"Cairo,sans-serif",fontWeight:700,fontSize:13,transition:"all 0.2s",
+        }}>← الرئيسية</button>
+
+        <div style={{
+          background:"rgba(255,255,255,0.06)",border:"1px solid rgba(167,139,250,0.15)",
+          borderRadius:12,padding:"8px 18px",color:"#c4b5fd",fontSize:18,fontWeight:900,letterSpacing:2,
+        }}>⏱ {formatTime(timer)}</div>
+
+        <button onClick={()=>{startGame(currentDiff);}} style={{
+          background:"rgba(124,58,237,0.18)",border:"1px solid rgba(124,58,237,0.35)",
+          borderRadius:12,padding:"8px 14px",color:"#a78bfa",cursor:"pointer",
+          fontFamily:"Cairo,sans-serif",fontWeight:700,fontSize:13,transition:"all 0.2s",
+        }}>🔄 جديد</button>
+      </div>
+
+      {/* Difficulty tabs */}
+      <div style={{display:"flex",gap:8,marginBottom:10}}>
+        {Object.keys(DIFFICULTIES).map(d=>(
+          <button key={d} onClick={()=>{setCurrentDiff(d);startGame(d);}} style={{
+            padding:"5px 16px",borderRadius:20,border:"none",cursor:"pointer",
+            fontFamily:"Cairo,sans-serif",fontWeight:700,fontSize:12,
+            background:currentDiff===d?"linear-gradient(135deg,#7c3aed,#4f46e5)":"rgba(255,255,255,0.05)",
+            color:currentDiff===d?"#fff":"rgba(196,181,253,0.45)",
+            boxShadow:currentDiff===d?"0 0 14px #7c3aed55":"none",transition:"all 0.2s",
+          }}>{d}</button>
+        ))}
+      </div>
+
+      {/* Win banner */}
+      {won&&(
+        <div style={{
+          width:"100%",maxWidth:400,marginBottom:10,
+          background:"linear-gradient(135deg,#7c3aed,#4f46e5)",
+          borderRadius:18,padding:"16px",textAlign:"center",
+          color:"#fff",fontWeight:900,fontSize:17,
+          boxShadow:"0 0 40px #7c3aed88",
+          animation:"popIn 0.5s cubic-bezier(0.34,1.56,0.64,1)",
+        }}>
+          🎉 رائع! أنهيت اللغز في {formatTime(timer)}
+        </div>
+      )}
+
+      {/* Board */}
+      <div style={{
+        display:"grid",gridTemplateColumns:"repeat(9,1fr)",
+        background:"rgba(124,58,237,0.45)",padding:3,borderRadius:14,
+        boxShadow:"0 0 50px #7c3aed33,0 4px 24px #0007",
+        width:"100%",maxWidth:400,border:"1px solid rgba(167,139,250,0.18)",
+      }}>
+        {board.map((row,r)=>row.map((val,c)=>{
+          const key=`${r}-${c}`,isFixed=fixed[key];
+          const isSel=selected&&selected[0]===r&&selected[1]===c;
+          const isErr=errors[key],isHl2=isHl(r,c),isSm2=isSm(r,c);
+          const cellNotes=notes[key]||new Set();
+          const thickR=(c+1)%3===0&&c!==8,thickB=(r+1)%3===0&&r!==8;
+          return(
+            <div key={key} onClick={()=>setSelected([r,c])} style={{
+              width:"100%",aspectRatio:"1",display:"flex",alignItems:"center",justifyContent:"center",
+              borderRadius:3,cursor:isFixed?"default":"pointer",
+              background:isSel?"rgba(124,58,237,0.88)":isErr?"rgba(244,63,94,0.14)":isSm2?"rgba(124,58,237,0.28)":isHl2?"rgba(255,255,255,0.055)":"rgba(13,11,30,0.88)",
+              outline:isSel?"2px solid #e879f9":isErr?"2px solid #f43f5e44":"none",
+              borderRight:thickR?"2px solid rgba(124,58,237,0.7)":"none",
+              borderBottom:thickB?"2px solid rgba(124,58,237,0.7)":"none",
+              fontSize:val?16:8,fontWeight:isFixed?900:700,
+              color:isSel?"#fff":isErr?"#f43f5e":isFixed?"#e2c6ff":"#a78bfa",
+              transition:"background 0.1s",boxSizing:"border-box",
+            }}>
+              {val?val:cellNotes.size>0?(
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",width:"100%",height:"100%"}}>
+                  {[1,2,3,4,5,6,7,8,9].map(n=>(
+                    <span key={n} style={{fontSize:6,color:cellNotes.has(n)?"#e879f9":"transparent",textAlign:"center",lineHeight:1.35,fontWeight:700}}>{n}</span>
+                  ))}
+                </div>
+              ):null}
+            </div>
+          );
+        }))}
+      </div>
+
+      {/* Numpad */}
+      <div style={{width:"100%",maxWidth:400,marginTop:14}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:10}}>
+          <button onClick={()=>setNoteMode(p=>!p)} style={{
+            padding:"8px 22px",borderRadius:20,border:"none",cursor:"pointer",
+            fontFamily:"Cairo,sans-serif",fontWeight:700,fontSize:13,
+            background:noteMode?"linear-gradient(135deg,#e879f9,#a855f7)":"rgba(255,255,255,0.07)",
+            color:"#fff",boxShadow:noteMode?"0 0 20px #e879f988":"none",
+            border:noteMode?"none":"1px solid rgba(255,255,255,0.08)",
+            transition:"all 0.2s",
+          }}>✏️ {noteMode?"ملاحظات مفعّلة":"وضع الملاحظات"}</button>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+          {[1,2,3,4,5,6,7,8,9].map(n=>(
+            <button key={n} className="num-btn" onClick={()=>handleNum(n)} style={{
+              padding:"15px 0",borderRadius:14,
+              border:"1px solid rgba(124,58,237,0.22)",cursor:"pointer",
+              fontFamily:"Cairo,sans-serif",fontWeight:900,fontSize:20,
+              background:"rgba(124,58,237,0.13)",color:"#e2c6ff",
+              boxShadow:"0 2px 8px #0004",transition:"all 0.1s",
+            }}>{n}</button>
+          ))}
+          <button onClick={()=>handleNum(0)} style={{
+            padding:"15px 0",borderRadius:14,
+            border:"1px solid rgba(244,63,94,0.28)",cursor:"pointer",
+            fontFamily:"Cairo,sans-serif",fontWeight:700,fontSize:14,
+            background:"rgba(244,63,94,0.11)",color:"#f43f5e",transition:"all 0.1s",
+          }}>مسح</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [screen,setScreen]=useState("home");
+  const [difficulty,setDifficulty]=useState("متوسط");
+  const handleStart=(diff)=>{setDifficulty(diff);setScreen("game");};
+  return screen==="home"
+    ?<HomeScreen onStart={handleStart}/>
+    :<GameScreen difficulty={difficulty} onHome={()=>setScreen("home")}/>;
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/Sudoku/sw.js')
+          .then(r => co
